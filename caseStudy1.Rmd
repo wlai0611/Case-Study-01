@@ -1,0 +1,176 @@
+---
+title: "caseStudy1"
+author: "Walter"
+date: "January 11, 2020"
+output:
+  pdf_document: default
+  html_document: default
+---
+Questions, what should we sell and to who?
+1.	Get top 5 States by Pop
+2.	Create beers/pop as BeersPerPerson
+3.	Take lowest BeersPerPerson
+4.	Based on that state’s ABV and IBH predict what their ABV and IBH will be
+5.	Then, based on IBH and ABV, what will the Beer Style be ?
+
+1. How many breweries are present in each state?
+```{r}
+beer=read.csv("Beers.csv")
+breweries=read.csv("Breweries.csv")
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(maps)
+States=map_data("state")
+
+  
+
+# Clean missing breweries , Aggregate number of breweries by State
+breweriesStates= breweries %>% 
+  filter(!is.na(Brew_ID))%>%
+  group_by(State) %>% count()
+lookup = data.frame(abb = state.abb, State = state.name)
+breweriesStates$State=gsub(" ","",breweriesStates$State)
+#get DC later
+#setdiff(breweriesStates$State,state.abb)
+lookup$abb=as.character(lookup$abb)
+lookup$State=as.character(lookup$State)
+stateabb2=rbind(lookup,c("DC","district of columbia"))
+stateNameBrew=merge(breweriesStates,lookup,by.x="State",by.y="abb",all.x = TRUE)
+stateNameBrew$State.y <- tolower(stateNameBrew$State.y)
+stateNBrew= merge(stateNameBrew,States,by.x="State.y",by.y="region",all.x = TRUE)
+
+stateLabels=stateNBrew %>% group_by(State) %>% summarise(avgLong=mean(long),avgLat=mean(lat))
+
+ggplot(stateNBrew, aes(x=long,y=lat)) + 
+  geom_polygon(aes(fill=n,group=group))+
+  geom_path(aes(group=group))+ 
+  scale_fill_gradientn(colours=rev(heat.colors(10)),na.value="grey90")+ggtitle("Number Breweries By State")+
+  geom_text(aes(avgLong,avgLat,label=State),data=stateLabels)
+
+stateNBrew %>% group_by(State) %>% summarise(brewPerState=mean(n))%>%ggplot() +
+  geom_histogram(aes(brewPerState),bins=20)
+
+  
+
+```
+2. Merge
+```{r}
+beerBrew=merge(beer,breweries,by.x="Brewery_id",by.y="Brew_ID")
+```
+#### FINDING NUMBER OF BEERS PER CAPITA
+
+State Pop has 2 columns: FUll Name of State and The Populaton
+In order to put the number of beers/State next to Population/State
+We must create a dataframe with 2 columns: Full State Name and Number of Beers
+```{r}
+statePop=read.csv("demoinfo.csv")
+beersState= beerBrew %>% group_by(State) %>% count()
+# remove spaces from state abbreviations because "TX" is actually " TX" .....
+beersState$State=gsub(" ","",beersState$State)
+
+#Create Lookup : State Abbrebiation + Full Name
+lookup$abb=as.character(lookup$abb)
+lookup$State=as.character(lookup$State)
+
+
+#Left Join Number of Beers with Full State Name
+beersState$State=as.character(beersState$State)
+stateNameBrew=merge(beersState,lookup,by.x="State",by.y="abb",all.x = TRUE)
+
+
+
+# Add Full Name of District Columbia to N,StateName table
+stateNameBrew$State.y[which(stateNameBrew$State=="DC")]="District of Columbia"
+
+#Join Number of Breweries with State Population
+statePopBrew= merge(stateNameBrew,statePop,by.x="State.y",by.y="State",all.x = TRUE)
+charPop= as.character(statePopBrew$X2020.Pop..)
+# remove the commas
+statePopBrew$pop=as.numeric(gsub(",","",charPop))
+statePopBrew=statePopBrew %>% mutate(beerPerCapita=n/pop) %>% arrange((beerPerCapita))
+write.csv(statePopBrew,"demoInfo2.csv")
+```
+Breweries/State controlled by population
+```{r}
+```
+
+
+3. Address the missing values in each column.
+```{r}
+library(naniar)
+gg_miss_var(beerBrew)
+
+
+
+beerBrew$Style[which(beerBrew$Style=="")]=NA
+sapply(beerBrew, function(x) sum(is.na(x)))
+
+beerBrew %>% filter(Style=="")
+
+
+```
+
+```{r}
+
+```
+
+4.Compute the median alcohol content and international bitterness unit for each state. Plot a bar chart to compare.
+
+```{r}
+beerBrew %>% group_by(State) %>%
+  filter(!is.na(ABV))%>%
+  summarise(ABV=median(ABV)) %>%
+   ggplot(aes(x=reorder(State,-ABV),ABV)) +
+  geom_bar(stat="identity", position="dodge", color='skyblue',fill='steelblue') + 
+  coord_flip()+ 
+  xlab("State") +  ylab("ABV") + ggtitle("Median ABV by State") 
+  
+ beerBrew %>% group_by(State) %>%
+  filter(!is.na(IBU))%>%
+  summarise(IBU=median(IBU)) %>%
+   ggplot(aes(x=reorder(State,-IBU),IBU)) +
+  geom_bar(stat="identity", position="dodge", color='skyblue',fill='steelblue') + 
+  coord_flip()+ 
+  xlab("State") +  ylab("IBU") + ggtitle("Median IBU by State")
+  
+  #ggplot()+geom_bar(aes(State,Value),stat="identity")+
+  #facet_grid(Variable~.,scales="free_y")+geom_text(aes(State,Value,label=State))+
+  #labs(title="Median Alcohol Metrics By State")
+
+#gather(df, “FormerVariablesColumnName”, #“FormerCellValuesColumnName”, #-formerVarNowIndex)
+```
+
+5. (part 1) Which state has the maximum alcoholic (ABV) beer? Which state has the most bitter (IBU) beer?
+
+
+```{r}
+#find the single most ABV beer
+beerBrew %>% filter(!is.na(ABV)) %>% mutate(maxABV=max(ABV)) %>%
+  filter(ABV==maxABV) %>%select(State,Name.x,Name.y,ABV)
+# 
+#find the single most bitter beer
+beerBrew %>% filter(!is.na(IBU)) %>% mutate(maxIBU=max(IBU)) %>%
+  filter(IBU==maxIBU)%>%select(State,Name.x,Name.y,IBU)
+```
+
+
+
+6.Comment on the summary statistics and distribution of the ABV variable
+ 
+```{r}
+
+beerBrew %>% filter(!is.na(ABV)) %>% ggplot() +stat_qq(aes(sample=ABV)) 
+beerBrew %>% filter(!is.na(ABV)) %>% ggplot()+geom_histogram(aes(ABV))
+
+beerBrew %>% filter(!is.na(ABV)) %>% select(ABV)%>%summary()
+```
+
+7. Is there an apparent relationship between the bitterness of the beer and its alcoholic content? Draw a scatter plot.  Make your best judgment of a relationship and EXPLAIN your answer.
+There is a moderate positive correlation between ABV and IBU.  The upward slope is evidence of a positive relationship.  The points' moderate to small deviations from the trendline is evidence of a moderate to weak relationship.
+
+```{r}
+beerBrew %>% filter(!is.na(ABV)&!is.na(IBU))%>%
+  
+ggplot(aes(ABV,IBU))+geom_point(position=position_jitter(width=0.01),alpha=0.5)+geom_smooth(method="lm") +labs(title="Correlation between ABV and IBU") 
+```

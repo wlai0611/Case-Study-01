@@ -1,0 +1,140 @@
+---
+title: "caseStudy1Part2"
+author: "Walter"
+date: "January 12, 2020"
+output: html_document
+---
+
+ Create Column "Beer Category" 
+```{r}
+# FInd all the names for beers
+randomBeers=sample(unique(beerBrewClean$Name.x),100)
+# Group 1: any beer containing "India Pale Ale" "IPA"
+# Group 2: any beer containing "Ale" but not in Group 1
+
+# if it contains "IPA or "India Pale ALe label IPA otherwise check Ale otherwise none
+randomBeersCategory=ifelse(grepl("(India Pale Ale|IPA)",randomBeers),"IPA","none")
+notIPAIndices=which(randomBeersCategory=="none")
+
+randomBeersCategory[notIPAIndices] = ifelse(grepl( "Ale",randomBeers[notIPAIndices]),"Ale","none")
+data.frame(randomBeers,randomBeersCategory)
+
+
+```
+
+```{r}
+beerBrewClean$BeerCategory=ifelse(grepl("(India Pale Ale|IPA)",beerBrewClean$Style),"IPA","none")
+notIPAIndices=which(beerBrewClean$BeerCategory=="none")
+beerBrewClean$BeerCategory[notIPAIndices] = ifelse(grepl( "Ale",beerBrewClean$Name.x[notIPAIndices]),"Ale","none")
+
+```
+
+```{r}
+IPAandAle=beerBrewClean %>% filter(BeerCategory=="IPA" |BeerCategory=="Ale" )
+library(caret)
+library(class)
+#scale the ABV and IBU
+
+
+IPAandAle = IPAandAle %>% mutate(scaleABV=scale(ABV),scaleIBU=scale(IBU))
+
+splitPerc=0.7
+response="BeerCategory"
+data=IPAandAle
+explanatory=c("scaleABV","scaleIBU")
+
+
+trainIndices = sample(1:dim(data)[1],round(splitPerc * dim(data)[1]))
+train = data[trainIndices,]
+test = data[-trainIndices,]
+
+
+
+classifications=knn(train[,explanatory],test[,explanatory],train[,response],k=3)
+
+CM = confusionMatrix(table(classifications,test[,response]))
+```
+
+```{r}
+splitPerc=0.7
+response="BeerCategory"
+data=IPAandAle
+explanatory=c("scaleABV","scaleIBU")
+iterations=100
+masterAcc=double(iterations)
+masterSens=double(iterations)
+masterSpec=double(iterations)
+
+for( x in 1:iterations){
+  
+trainIndices = sample(1:dim(data)[1],round(splitPerc * dim(data)[1]))
+train = data[trainIndices,]
+test = data[-trainIndices,]
+classifications=knn(train[,explanatory],test[,explanatory],train[,response],k=3)  
+
+  CM = confusionMatrix(table(classifications,test[,response]))
+  masterAcc[x] = CM$overall[1]
+  masterSens[x]=CM$byClass[1]
+  masterSpec[x]=CM$byClass[2]
+  }
+MeanAcc = mean(masterAcc)
+MeanSens=mean(masterSens)
+MeanSpec=mean(masterSpec)
+
+```
+Other insights
+```{r}
+library(GGally)
+
+
+beerBrewClean$StateCut=beerBrewClean %>% recode
+
+stateRegions=list("NE"=c("CT","ME","MA","NH","RI",
+                         "VT","NJ","NY","PA"),
+                  "MW"=c("IL","IN","MI","OH",
+                         "WI","IA","KS","MN",
+                         "MO","NE","ND","SD"),
+                  "S"=c("DE","FL","GA","MD","NC",
+                        "SC","VA","DC","WV",
+                        "AL","KY","MS","TN",
+                        "AR","LA","OK","TX"),
+                  "W"=c("AZ","CO","ID","MT",
+                        "NV","NM","UT","WY",
+                        "AK","CA","HI","OR",
+                        "WA"))
+"CT" %in% stateRegions[["NE"]]
+stateRegionDF=stack(stateRegions)
+stateRegionDF$ind["CT"]
+#Find the value column of ind = NE
+stateRegionDF$ind=as.character(stateRegionDF$ind)
+
+
+#combined <- sort(union(levels(stateRegionDF$val#ues), levels(beerBrewClean$State)))
+
+beerBrewClean$State=as.character(beerBrewClean$State)
+
+testStates=data.frame(State=as.character(beerBrewClean$State[1]))
+testStates %>%
+  left_join(stateRegionDF,by=c("State"="values"))
+merge(x=testStates,y=stateRegionDF,by.x="State",
+      by.y="values",all.x=TRUE)
+
+beerBrewClean %>%
+  left_join(stateRegionDF,by=c("State"="values"))
+
+
+
+beerBrewClean%>% select(ABV,IBU,BeerCategory) %>%
+  ggpairs(aes(color=BeerCategory))
+
+```
+
+
+
+
+Filter states based on lowest n/pop.
+Use KNN explanatory: IBU, ABV, to find category of beer desired
+
+```{r}
+
+```
