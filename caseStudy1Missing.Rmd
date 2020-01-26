@@ -1,11 +1,15 @@
 ---
 title: "caseStudy1"
-author: "Walter"
+author: "Walter Lai & Chad Reo"
 date: "January 11, 2020"
 output:
   pdf_document: default
   html_document: default
 ---
+
+The purpose of this code and analysis is is to provide a proof of concept for our proposed targetted marketing campagain.  We are
+utilizing the beer and brewery data provided to us for this project and intend to display the prower of predictive analytics.  
+
 
 Load Data and Libraries
 ```{r}
